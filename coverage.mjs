@@ -43,10 +43,38 @@ export function assess(state) {
     return { ...task, blockers, covered: blockers.length === 0 };
   });
   const complete = tasks.length > 0 && tasks.every(t => t.covered) && state.scopeConfirmed;
+  const firstStructural = tasks.map(task => ({ task, blocker: task.blockers.find(b => b.code !== 'AWAITING_ACCEPTANCE') }))
+    .find(x => x.blocker);
+  const firstPending = tasks.map(task => ({ task, blocker: task.blockers.find(b => b.code === 'AWAITING_ACCEPTANCE') }))
+    .find(x => x.blocker);
+  const selected = firstStructural ?? firstPending;
+  const firstUncovered = selected?.task;
+  const firstBlocker = selected?.blocker;
+  let nextAction = null;
+  if (firstBlocker?.code === 'UNASSIGNED') nextAction = {
+    code: 'UNASSIGNED', task: firstUncovered.id,
+    text: `Assign ${firstUncovered.id} to an available helper; no prior acceptance carries over.`
+  };
+  else if (firstBlocker?.code === 'UNAVAILABLE') nextAction = {
+    code: 'UNAVAILABLE', task: firstUncovered.id,
+    text: `Retime or reassign ${firstUncovered.id}; its assigned helper is not available for the whole task.`
+  };
+  else if (firstBlocker?.code === 'OVERLAP') nextAction = {
+    code: 'OVERLAP', task: firstUncovered.id,
+    text: `Resolve ${firstUncovered.id} overlap with ${firstBlocker.with} before recording simulated acceptance.`
+  };
+  else if (firstBlocker?.code === 'AWAITING_ACCEPTANCE') nextAction = {
+    code: 'AWAITING_ACCEPTANCE', task: firstUncovered.id,
+    text: `Record simulated acceptance for ${firstUncovered.id} from its assigned helper and exact task version; no real helper is contacted.`
+  };
+  else if (!state.scopeConfirmed) nextAction = {
+    code: 'CONFIRM_ENTERED_SCOPE', task: null,
+    text: 'Review whether any duties were omitted, then confirm only the entered scope; this does not verify real-world coverage.'
+  };
   return { title: state.title, date: state.date, revision: state.revision,
     status: complete ? 'ENTERED_TASKS_COVERED' : 'NEEDS_ATTENTION',
     statement: complete ? 'All entered tasks have simulated accepted coverage.' : 'The entered handover still needs attention.',
-    scopeConfirmed: state.scopeConfirmed, uncoveredTasks: tasks.filter(t => !t.covered).map(t => t.id),
+    scopeConfirmed: state.scopeConfirmed, uncoveredTasks: tasks.filter(t => !t.covered).map(t => t.id), nextAction,
     tasks, lastChange: state.history.at(-1) ?? null,
     limitations: ['Fictional shop and simulated helper actions only.', 'This does not verify omitted duties, real employee acceptance, staffing law, travel time or business safety.', 'No messages, calendar changes or employment commitments are sent.'] };
 }

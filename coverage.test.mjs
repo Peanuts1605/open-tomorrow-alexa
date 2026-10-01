@@ -18,20 +18,35 @@ test('empty, duplicate, impossible dates, inverted times and unknown assignees r
 });
 test('exact overlap and acceptance blockers; adjacent tasks do not overlap', () => {
   const s = make(); assert.ok(s.read().tasks[0].blockers.some(b => b.text.includes('08:30–09:00')));
+  assert.deepEqual(s.read().nextAction, { code: 'OVERLAP', task: 'setup', text: 'Resolve setup overlap with delivery before recording simulated acceptance.' });
   apply(s, { kind: 'retime', task: 'delivery', start: 540, end: 585 });
   assert.ok(s.read().tasks.every(t => !t.blockers.some(b => b.code === 'OVERLAP')));
   assert.ok(s.read().tasks.every(t => t.blockers.some(b => b.code === 'AWAITING_ACCEPTANCE')));
 });
 test('scope confirmation and acceptance are both necessary, acceptance is simulated', () => {
   const s = make(); complete(s); assert.equal(s.read().status, 'ENTERED_TASKS_COVERED');
+  assert.equal(s.read().nextAction, null);
   const p = structuredClone(s.state); p.scopeConfirmed = false; assert.equal(assess(p).status, 'NEEDS_ATTENTION');
+  assert.deepEqual(assess(p).nextAction, { code: 'CONFIRM_ENTERED_SCOPE', task: null, text: 'Review whether any duties were omitted, then confirm only the entered scope; this does not verify real-world coverage.' });
   p.scopeConfirmed = true; p.tasks[0].acceptance = null; assert.equal(assess(p).status, 'NEEDS_ATTENTION');
+  assert.deepEqual(assess(p).nextAction, { code: 'AWAITING_ACCEPTANCE', task: 'setup', text: 'Record simulated acceptance for setup from its assigned helper and exact task version; no real helper is contacted.' });
   assert.throws(() => apply(s, { kind: 'record_acceptance', task: 'setup', person: 'opener', taskVersion: 1, simulated: false }));
+});
+test('structural blocker on a later task precedes simulated acceptance on an earlier task', () => {
+  const s = make();
+  const p = structuredClone(s.state);
+  p.tasks[0].end = 540;
+  p.tasks[1].start = 540;
+  p.tasks[1].assignee = null;
+  const report = assess(p);
+  assert.deepEqual(report.uncoveredTasks, ['setup', 'delivery']);
+  assert.deepEqual(report.nextAction, { code: 'UNASSIGNED', task: 'delivery', text: 'Assign delivery to an available helper; no prior acceptance carries over.' });
 });
 test('cancellation changes only affected task; stale acceptance and reassignment cannot restore readiness', () => {
   const s = make(); complete(s); const setup = structuredClone(s.state.tasks[0]); const version = s.state.tasks[1].version;
   apply(s, { kind: 'cancel', person: 'driver' });
   assert.deepEqual(s.read().uncoveredTasks, ['delivery']); assert.deepEqual(s.state.tasks[0], setup);
+  assert.deepEqual(s.read().nextAction, { code: 'UNASSIGNED', task: 'delivery', text: 'Assign delivery to an available helper; no prior acceptance carries over.' });
   assert.throws(() => apply(s, { kind: 'record_acceptance', task: 'delivery', person: 'driver', taskVersion: version, simulated: true }), /STALE_OR_WRONG/);
   apply(s, { kind: 'assign', task: 'delivery', person: 'driver' });
   assert.ok(s.read().tasks[1].blockers.some(b => b.code === 'UNAVAILABLE'));

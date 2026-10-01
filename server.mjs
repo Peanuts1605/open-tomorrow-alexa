@@ -25,7 +25,7 @@ export async function startServer({ file = '.local/plan.json', port = 0 } = {}) 
       inputSchema: { plan: Plan }
     }, guarded(({ plan }) => store.create(plan)));
     server.registerTool('check_coverage', {
-      description: 'Read exact coverage blockers and last change. Covered means entered tasks only, with simulated acceptance, never business safety.',
+      description: 'Read exact coverage blockers, the first safe next action and last change. Covered means entered tasks only, with simulated acceptance, never business safety.',
       inputSchema: {}, annotations: { readOnlyHint: true }
     }, guarded(() => store.read()));
     server.registerTool('change_handover', {

@@ -27,12 +27,14 @@ The successful demonstration proves:
 5. Acceptance from the cancelled assignment is rejected.
 6. The changed plan survives a process restart and a new MCP connection.
 
+Each `check_coverage` result also returns one deterministic `nextAction`. Across all entered tasks, it puts assignment, availability or overlap ahead of simulated acceptance; after all entered tasks are accepted, it asks for an explicit entered-scope review. `nextAction` becomes `null` only when the narrowly scoped simulated handover is covered. This is guidance from entered facts, not a message to a real helper or a claim that omitted duties are safe.
+
 ## MCP surface
 
 `npm start` serves `http://127.0.0.1:8917/mcp` and stores its single local plan in `.local/plan.json`. Compatible agent clients can call:
 
 - `create_handover`: initialize explicit dated tasks and helper availability once.
-- `check_coverage`: read exact blockers, entered-scope status and last affected tasks.
+- `check_coverage`: read exact blockers, the first safe next action, entered-scope status and last affected tasks.
 - `change_handover`: version-checked assignment, simulated acceptance, cancellation, time correction, or scope confirmation.
 
 Protocol **2025-11-25**, negotiated and verified in the demonstration using `@modelcontextprotocol/sdk` 1.30.0. This is not a wrapper claiming integration only in documentation: the actual client/server transport and tools run in the proof.
@@ -47,6 +49,6 @@ Protocol **2025-11-25**, negotiated and verified in the demonstration using `@mo
 
 ## Contest status and provenance
 
-Candidate for the Alexa+ track of the [Amazon Developer Hackathon](https://amazonappdev2026.devpost.com/). **Not registered and not submitted as of September 11, 2026.** The prior Open Tomorrow idea was written in July; this implementation began September 11. Final entry must disclose this history accurately and include a judge-facing experience, public under-three-minute video and truthful tool feedback. Provider confirmation, not this README, decides submission status.
+Candidate for the Alexa+ track of the [Amazon Developer Hackathon](https://amazonappdev2026.devpost.com/). The prior Open Tomorrow idea was written in July; this implementation began September 11. Final entry must disclose this history accurately and include a judge-facing experience, public under-three-minute video and truthful tool feedback. This repository is not evidence of registration or submission; only Devpost's provider state can establish those facts.
 
 AI-assisted design and code by Codex. The authored fixture contains no real shop, employee or customer information. No third-party media assets are used. The MCP SDK and Zod retain their respective open-source licenses.

@@ -46,23 +46,28 @@ try {
   }
   let state = await call('create_handover', { plan: florist });
   assert.ok(state.tasks[0].blockers.some(b => b.code === 'OVERLAP' && b.text.includes('08:30–09:00')));
-  console.log('1. Actual MCP call: overlap blocks setup and delivery, 08:30–09:00.');
+  assert.equal(state.nextAction.code, 'OVERLAP');
+  console.log(`1. Actual MCP call: overlap blocks setup and delivery, 08:30–09:00. Next: ${state.nextAction.text}`);
   let n = 0;
   async function change(change) { const r = await call('change_handover', { expectedRevision: state.revision, operationId: `demo-${++n}`, change }); state = r.current; return r; }
   await change({ kind: 'assign', task: 'delivery', person: 'driver' });
   assert.equal(state.status, 'NEEDS_ATTENTION');
-  console.log('2. Reassigned delivery; assignment alone does not establish acceptance.');
+  assert.equal(state.nextAction.code, 'AWAITING_ACCEPTANCE');
+  console.log(`2. Reassigned delivery; assignment alone does not establish acceptance. Next: ${state.nextAction.text}`);
   for (const task of state.tasks) await change({ kind: 'record_acceptance', task: task.id, person: task.assignee, taskVersion: task.version, simulated: true });
   assert.equal(state.status, 'NEEDS_ATTENTION');
+  assert.equal(state.nextAction.code, 'CONFIRM_ENTERED_SCOPE');
   await change({ kind: 'confirm_entered_scope', confirmed: true });
   assert.equal(state.status, 'ENTERED_TASKS_COVERED');
+  assert.equal(state.nextAction, null);
   const priorSetup = structuredClone(state.tasks[0]);
   const oldDeliveryVersion = state.tasks[1].version;
   console.log('3. Only after simulated acceptance and scope confirmation: entered tasks covered.');
   await change({ kind: 'cancel', person: 'driver' });
   assert.deepEqual(state.uncoveredTasks, ['delivery']);
+  assert.deepEqual({ code: state.nextAction.code, task: state.nextAction.task }, { code: 'UNASSIGNED', task: 'delivery' });
   assert.deepEqual(state.tasks[0], priorSetup);
-  console.log('4. Helper B cancels: delivery reopens; Helper A setup and acceptance stay intact.');
+  console.log(`4. Helper B cancels: delivery reopens; Helper A setup and acceptance stay intact. Next: ${state.nextAction.text}`);
   const stale = await client.callTool({ name: 'change_handover', arguments: { expectedRevision: state.revision, operationId: 'stale-acceptance', change: { kind: 'record_acceptance', task: 'delivery', person: 'driver', taskVersion: oldDeliveryVersion, simulated: true } } });
   assert.equal(stale.isError, true);
   console.log('5. Acceptance for the cancelled assignment is rejected.');
