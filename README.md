@@ -1,10 +1,12 @@
-# Open Tomorrow
+# Open Tomorrow for Alexa+
 
-The last check before your day off.
+The last check before your day off, and it won't tell you you're covered when you're not.
 
-A fictional flower-shop owner has arranged Saturday cover. One helper is assigned to set up the shop **08:00–09:00** and deliver flowers **08:30–09:15**. That is not a workable handover. Open Tomorrow exposes the exact conflict, separates assignment from acceptance, and reopens the affected duty when a helper cancels.
+Open Tomorrow is a **self-hosted MCP server** (protocol **2025-11-25**, Streamable HTTP) plus a **simulated Alexa+ experience** that calls it live. A small-business owner asks Alexa+ whether tomorrow is covered; Open Tomorrow checks the real handover: exact time clashes, who has actually *accepted* (not just been assigned), and whether a cancellation reopened a task. An old "yes" for a cancelled assignment never counts.
 
-This is an early, working **local MCP server**, not a completed contest entry or Alexa integration. Its helpers and acceptance actions are explicitly simulated. It does not send messages or alter anybody's real schedule.
+**Try it:** https://open-tomorrow-alexa.gigantic-stranger.workers.dev/ (Play all, type your own request, or scan the helper QR code with a phone to accept a task).
+
+The shop, helpers and every acceptance are fictional and simulated. Nothing sends messages or changes anybody's real schedule.
 
 ## Run the complete proof
 
@@ -33,7 +35,7 @@ Each `check_coverage` result also returns one deterministic `nextAction`. Across
 
 Live: **https://open-tomorrow-alexa.gigantic-stranger.workers.dev/**
 
-A judge-facing page that simulates the Alexa+ voice layer. Scripted voice turns are shown, and optionally spoken with the browser's speech synthesis. Every Alexa+ reply is built from live MCP tool results. The browser runs the official MCP TypeScript SDK client. It talks over Streamable HTTP (2025-11-25) to the same `create_handover`, `check_coverage` and `change_handover` tools (`tools.mjs`, `coverage.mjs`), served by a Cloudflare Worker (`web/worker.mjs`). Each visitor gets a private Durable Object session that expires after a day. The voice layer is simulated; the tool calls are not.
+A judge-facing page that simulates the Alexa+ voice layer. Scripted voice turns are shown, and optionally spoken with the browser's speech synthesis (with a 2× speed option). Visitors can also type, or speak where the browser supports the Web Speech API, their own requests ("who's free?", "Helper B can't come", "give it to Helper C", "what's uncovered?", "that's everything"). A deterministic intent router (no language model) maps those words onto the same MCP tool calls, shown live in the wire panel. When a task is waiting for a yes, a locally generated QR code opens a helper card on a phone; tapping Accept records a simulated acceptance for the exact current assignment through the same rules, and the main screen flips to covered. Every Alexa+ reply is built from live MCP tool results. The browser runs the official MCP TypeScript SDK client. It talks over Streamable HTTP (2025-11-25) to the same `create_handover`, `check_coverage` and `change_handover` tools (`tools.mjs`, `coverage.mjs`), served by a Cloudflare Worker (`web/worker.mjs`). Each visitor gets a private Durable Object session that expires after a day. The voice layer is simulated; the tool calls are not.
 
 ```sh
 npm ci
@@ -59,7 +61,7 @@ Protocol **2025-11-25**, negotiated and verified in the demonstration using `@mo
 - The result covers **entered tasks only**. Missing duties are unknown, not safe. This is not labor-law, staffing, travel-time, safety or business-continuity advice.
 - One day, explicit local wall-time minutes, one operator/server process. Multiple processes sharing a store are unsupported. No shift import, optimization, real-time integrations, employee messaging or automatic plan completion is claimed.
 - Loopback only; browser origins rejected. Do not expose this development server to the network. Authentication, multi-user isolation and public hosting are not implemented.
-- No language-model reasoning, speech recognition, Alexa-device execution or end-user validation has been demonstrated yet. The scripted proof is labeled as a scripted proof. The web page simulates the Alexa+ voice layer with scripted turns; only its MCP tool calls are real.
+- No language-model reasoning, Alexa-device execution or end-user validation is claimed. Free-text turns use a deterministic keyword router; the optional mic uses the browser's own speech recognition. The web page simulates the Alexa+ voice layer; its MCP tool calls are real.
 
 ## Contest status and provenance
 

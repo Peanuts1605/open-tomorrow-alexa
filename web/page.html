@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Open Tomorrow · Simulated Alexa+ handover check</title>
+<title>Open Tomorrow for Alexa+</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Ccircle cx=%2216%22 cy=%2216%22 r=%2212%22 fill=%22none%22 stroke=%22%2322d3ee%22 stroke-width=%224%22/%3E%3C/svg%3E"><meta name="description" content="A simulated Alexa+ conversation that calls the real Open Tomorrow MCP server to check whether tomorrow's handover is really covered.">
 <style>
 :root{--bg:#0a1020;--panel:#111a30;--panel2:#16213d;--line:#24324f;--ink:#eef3ff;--muted:#93a0bd;--cyan:#22d3ee;--blue:#3b82f6;--rose:#f472b6;--good:#34d399;--warn:#fbbf24;--bad:#f87171;--r:18px}
@@ -9,7 +9,7 @@ header{max-width:1180px;margin:0 auto;padding:28px 24px 8px;display:flex;gap:16p
 h1{margin:10px 0 4px;font-size:clamp(26px,4vw,40px);letter-spacing:-.02em;line-height:1.1}h1 em{font-style:normal;background:linear-gradient(90deg,var(--cyan),var(--rose));-webkit-background-clip:text;background-clip:text;color:transparent}
 .lede{color:var(--muted);max-width:620px;margin:0}
 main{max-width:1180px;margin:0 auto;padding:16px 24px 32px;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:20px}
-@media(max-width:900px){main{grid-template-columns:1fr}}@media(max-width:560px){.row{grid-template-columns:1fr 84px}.row .track{grid-column:1/-1;grid-row:2}.axis-row .axis{grid-column:1/-1}.axis-row>span{display:none}.axis .half{display:none}header,main,footer{padding-left:14px;padding-right:14px}.convo{min-height:0}#chat{max-height:440px}}
+@media(max-width:900px){main{grid-template-columns:minmax(0,1fr)}}.card{min-width:0}@media(max-width:560px){.row{grid-template-columns:1fr 84px}.row .track{grid-column:1/-1;grid-row:2}.axis-row .axis{grid-column:1/-1}.axis-row>span{display:none}.axis .half{display:none}header,main,footer{padding-left:14px;padding-right:14px}.convo{min-height:0}#chat{max-height:440px}}
 .card{background:linear-gradient(180deg,#131d36,#0f1830);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 20px 50px #0007}
 .card h2{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0;font-weight:700}
 .convo{display:flex;flex-direction:column;min-height:620px}
@@ -31,7 +31,7 @@ main{max-width:1180px;margin:0 auto;padding:16px 24px 32px;display:grid;grid-tem
 .controls{padding:14px 20px 18px;border-top:1px solid var(--line)}
 .progress{height:3px;background:#1d2945;border-radius:3px;overflow:hidden;margin-bottom:12px}#progress{height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--rose));transition:width .4s}
 .btns{display:flex;gap:8px;flex-wrap:wrap}
-button{font:inherit;font-weight:650;border-radius:12px;padding:10px 16px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);cursor:pointer;transition:.15s}
+button{font:inherit;font-weight:650;border-radius:12px;padding:10px 14px;min-height:44px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);cursor:pointer;transition:.15s}
 button:hover:not(:disabled){border-color:var(--cyan)}button:disabled{opacity:.45;cursor:default}button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 #next{background:linear-gradient(135deg,#0ea5c6,#2563eb);border-color:transparent}
 #hint{color:var(--muted);font-size:13px;margin:10px 0 0;min-height:20px}
@@ -54,21 +54,37 @@ button:hover:not(:disabled){border-color:var(--cyan)}button:disabled{opacity:.45
 .call-head{display:flex;justify-content:space-between}.tool{color:var(--cyan);font-weight:700}.meta{color:var(--muted);font-size:12px}
 .summary{margin:4px 0 2px;font:12px ui-monospace,Menlo,monospace;color:#c9d3ea}
 details summary{cursor:pointer;color:var(--muted);font-size:12px}pre{margin:6px 0 0;max-height:220px;overflow:auto;font-size:11px;background:#070d1c;padding:8px;border-radius:8px;color:#b9c6e4}
+#ask{display:flex;gap:8px;margin-top:12px}#say{flex:1;min-width:0;font:inherit;color:var(--ink);background:#0c1428;border:1px solid var(--line);border-radius:12px;padding:10px 14px;min-height:48px}#say:focus{outline:2px solid var(--cyan);outline-offset:1px}
+#ask button{min-height:48px}#mic{min-width:48px;padding:0 12px}#mic[data-on="1"]{border-color:var(--rose);box-shadow:0 0 14px #f472b688}#send{background:#1d2a4a}
+#examples{margin:10px 0 0;font-size:12.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center}.ex{font-size:12.5px;font-weight:600;padding:5px 10px;border-radius:999px;min-height:32px}
+.nw{white-space:nowrap;font-size:inherit!important}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+#towire{display:none;margin-top:12px;color:var(--cyan);font-size:14px;font-weight:600;text-decoration:none;padding:8px 0}
+@media(max-width:900px){#towire{display:inline-block}}
+.qrwrap{display:flex;gap:16px;align-items:center}#qr{width:132px;height:132px;background:#fff;border-radius:12px;padding:8px;flex:none}#qr svg{width:100%;height:100%;display:block}
+#qrask{margin:0 0 6px;font-weight:700;font-size:16px}.small{font-size:12.5px;margin:0}
+#speed[aria-pressed="true"]{border-color:var(--cyan);color:var(--cyan)}
+.turn.you.typed p{background:#33305e}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 footer{max-width:1180px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12.5px}footer a{color:var(--cyan)}
 </style></head><body>
 <header><div class="brand"><small>Simulated Alexa+ experience · Real MCP calls</small>
-<h1>Open <em>Tomorrow</em></h1><p class="lede">The last check before your day off. Talk through a fictional flower shop’s Saturday handover. Every reply comes from live calls to the Open Tomorrow MCP server.</p></div></header>
+<h1>Open <em>Tomorrow</em> for Alexa+</h1><p class="lede">The last check before your day off. Talk through a fictional flower shop’s Saturday handover. Every reply comes from live calls to the Open Tomorrow MCP server.</p></div></header>
 <main>
 <section class="card convo" aria-label="Conversation">
-  <div class="device"><div id="echo" data-mode="idle" aria-hidden="true"></div><div><b>Alexa+ (simulated)</b><span>Scripted voice turns · answers built from real tool results</span></div></div>
+  <div class="device"><div id="echo" data-mode="idle" aria-hidden="true"></div><div><b>Alexa+ (simulated)</b><span>Scripted or free-text turns · answers built from real tool results</span></div></div>
   <ol id="chat" aria-live="polite"></ol>
   <div class="controls"><div class="progress"><div id="progress"></div></div>
-    <div class="btns"><button id="next">Start the conversation</button><button id="auto">Play all</button><button id="voice" aria-pressed="false">🔈 Voice off</button><button id="reset">Reset</button></div>
-    <p id="hint"></p></div>
+    <div class="btns"><button id="next">Start the conversation</button><button id="auto">Play all</button><button id="speed" aria-pressed="false" title="Playback speed">1×</button><button id="voice" aria-pressed="false">🔈 Voice</button><button id="reset">Reset</button></div>
+    <p id="hint"></p>
+    <form id="ask" autocomplete="off"><label for="say" class="sr">Say something to Alexa+</label><input id="say" maxlength="200" placeholder="Or say it your way: “Helper C can take the delivery”" enterkeyhint="send"><button type="button" id="mic" hidden aria-label="Speak instead of typing" title="Speak">🎤</button><button id="send">Send</button></form>
+    <p id="examples">Try: <button type="button" class="ex">Who’s free?</button><button type="button" class="ex">Helper B can’t come</button><button type="button" class="ex">Give it to Helper C</button><button type="button" class="ex">What’s uncovered?</button></p>
+    <a id="towire" href="#wirecard">See the tool calls ↓</a></div>
 </section>
 <div class="side">
-  <section class="card pad" aria-label="Handover board"><div class="head"><h2>Saturday handover · 19 Sep</h2><span id="status" class="status idle">No plan</span></div><div id="board"></div></section>
-  <section class="card pad" aria-label="MCP tool calls"><div class="head"><h2>MCP wire</h2><span class="meta">POST /mcp</span></div><p id="proto">Not connected yet</p><ol id="wire"></ol></section>
+  <section class="card pad" aria-label="Handover board"><div class="head"><h2>Saturday handover · <span id="day">this week</span></h2><span id="status" class="status idle">No plan</span></div><div id="board"></div></section>
+  <section class="card pad" id="qrcard" aria-label="Helper phone card" hidden><div class="head"><h2>Ask the helper on a phone</h2><span class="status warn">Awaiting yes</span></div>
+    <div class="qrwrap"><a id="qrlink" target="_blank" rel="noopener" aria-label="Open the helper card"><div id="qr" aria-hidden="true"></div></a><div><p id="qrask"></p><p class="muted small">Scan with a phone camera and tap Accept. This screen flips on its own. The acceptance is simulated and nobody real is contacted.</p></div></div></section>
+  <section class="card pad" id="wirecard" aria-label="MCP tool calls"><div class="head"><h2>MCP wire</h2><span class="meta">POST /mcp</span></div><p id="proto">Not connected yet</p><ol id="wire"></ol></section>
 </div>
 </main>
 <footer>Fictional shop and helpers, and every acceptance is simulated. No messages are sent and no real schedule is changed. “Covered” means only the tasks you entered. This page simulates the Alexa+ voice layer. The tool calls are real: an MCP client in your browser (official TypeScript SDK) talks to the same <code>create_handover</code>, <code>check_coverage</code> and <code>change_handover</code> tools, served over Streamable HTTP from a Cloudflare Worker with one private session per visitor. Source: <a href="https://github.com/Peanuts1605/open-tomorrow" rel="noopener">github.com/Peanuts1605/open-tomorrow</a>.</footer>
