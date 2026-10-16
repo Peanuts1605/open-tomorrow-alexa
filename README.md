@@ -29,6 +29,20 @@ The successful demonstration proves:
 
 Each `check_coverage` result also returns one deterministic `nextAction`. Across all entered tasks, it puts assignment, availability or overlap ahead of simulated acceptance; after all entered tasks are accepted, it asks for an explicit entered-scope review. `nextAction` becomes `null` only when the narrowly scoped simulated handover is covered. This is guidance from entered facts, not a message to a real helper or a claim that omitted duties are safe.
 
+## Simulated Alexa+ experience (web)
+
+Live: **https://open-tomorrow-alexa.gigantic-stranger.workers.dev/**
+
+A judge-facing page that simulates the Alexa+ voice layer. Scripted voice turns are shown, and optionally spoken with the browser's speech synthesis. Every Alexa+ reply is built from live MCP tool results. The browser runs the official MCP TypeScript SDK client. It talks over Streamable HTTP (2025-11-25) to the same `create_handover`, `check_coverage` and `change_handover` tools (`tools.mjs`, `coverage.mjs`), served by a Cloudflare Worker (`web/worker.mjs`). Each visitor gets a private Durable Object session that expires after a day. The voice layer is simulated; the tool calls are not.
+
+```sh
+npm ci
+node web/build.mjs          # bundles the browser client and the Worker into dist/
+npx wrangler dev            # local Worker on http://127.0.0.1:8787 (wrangler needs Node 22+)
+node web/smoke.mjs http://127.0.0.1:8787   # end-to-end MCP check against a local or deployed Worker
+npx wrangler deploy         # deploy (uses wrangler.toml)
+```
+
 ## MCP surface
 
 `npm start` serves `http://127.0.0.1:8917/mcp` and stores its single local plan in `.local/plan.json`. Compatible agent clients can call:
@@ -45,7 +59,7 @@ Protocol **2025-11-25**, negotiated and verified in the demonstration using `@mo
 - The result covers **entered tasks only**. Missing duties are unknown, not safe. This is not labor-law, staffing, travel-time, safety or business-continuity advice.
 - One day, explicit local wall-time minutes, one operator/server process. Multiple processes sharing a store are unsupported. No shift import, optimization, real-time integrations, employee messaging or automatic plan completion is claimed.
 - Loopback only; browser origins rejected. Do not expose this development server to the network. Authentication, multi-user isolation and public hosting are not implemented.
-- No language-model reasoning, speech recognition, Alexa-device execution or end-user validation has been demonstrated yet. The scripted proof is labeled as a scripted proof.
+- No language-model reasoning, speech recognition, Alexa-device execution or end-user validation has been demonstrated yet. The scripted proof is labeled as a scripted proof. The web page simulates the Alexa+ voice layer with scripted turns; only its MCP tool calls are real.
 
 ## Contest status and provenance
 

@@ -1,4 +1,5 @@
-node_modules/
-.local/
-.env*
-*.tmp
+node_modules
+.local
+dist
+web/page.generated.mjs
+.wrangler

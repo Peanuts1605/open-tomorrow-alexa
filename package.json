@@ -3,7 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": {"test": "node --test", "start": "node server.mjs", "demo": "node demo.mjs"},
-  "dependencies": {"@modelcontextprotocol/sdk": "1.30.0", "zod": "^4.0.0"},
-  "engines": {"node": ">=22"}
+  "scripts": {
+    "test": "node --test",
+    "start": "node server.mjs",
+    "demo": "node demo.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "zod": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "wrangler": "^4.151.1"
+  }
 }

@@ -1,0 +1,13 @@
+name = "open-tomorrow-alexa"
+main = "dist/worker.mjs"
+compatibility_date = "2026-10-15"
+compatibility_flags = ["nodejs_compat"]
+no_bundle = true
+
+[[durable_objects.bindings]]
+name = "SESSIONS"
+class_name = "HandoverSession"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["HandoverSession"]

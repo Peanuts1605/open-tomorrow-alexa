@@ -79,14 +79,20 @@ export function assess(state) {
     limitations: ['Fictional shop and simulated helper actions only.', 'This does not verify omitted duties, real employee acceptance, staffing law, travel time or business safety.', 'No messages, calendar changes or employment commitments are sent.'] };
 }
 
+export function fileIo(file) {
+  return {
+    load: () => existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null,
+    save: next => {
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(`${file}.tmp`, JSON.stringify(next, null, 2), { mode: 0o600 });
+      renameSync(`${file}.tmp`, file);
+    }
+  };
+}
 export class CoverageStore {
-  constructor(file) { this.file = file; this.state = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null; }
-  save(next) {
-    mkdirSync(dirname(this.file), { recursive: true });
-    writeFileSync(`${this.file}.tmp`, JSON.stringify(next, null, 2), { mode: 0o600 });
-    renameSync(`${this.file}.tmp`, this.file);
-    this.state = next;
-  }
+  // `io` lets a host other than the local file system (e.g. a Cloudflare Durable Object) persist the same plan.
+  constructor(file, io = fileIo(file)) { this.file = file; this.io = io; this.state = io.load(); }
+  save(next) { this.io.save(next); this.state = next; }
   create(input) {
     if (this.state) throw new Error('PLAN_EXISTS: use the existing plan; initialization never overwrites it');
     const p = Plan.parse(input);

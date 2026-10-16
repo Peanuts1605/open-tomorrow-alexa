@@ -1,9 +1,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js';
-import * as z from 'zod/v4';
 import { pathToFileURL } from 'node:url';
-import { CoverageStore, Plan, Change } from './coverage.mjs';
+import { CoverageStore } from './coverage.mjs';
+import { registerTools } from './tools.mjs';
 
 export async function startServer({ file = '.local/plan.json', port = 0 } = {}) {
   const store = new CoverageStore(file);
@@ -15,23 +15,7 @@ export async function startServer({ file = '.local/plan.json', port = 0 } = {}) 
   });
   app.post('/mcp', async (req, res) => {
     const server = new McpServer({ name: 'open-tomorrow', version: '0.1.0' });
-    const result = value => ({ content: [{ type: 'text', text: JSON.stringify(value) }], structuredContent: value });
-    const guarded = fn => async args => {
-      try { return result(fn(args)); }
-      catch (err) { return { isError: true, content: [{ type: 'text', text: err.message }] }; }
-    };
-    server.registerTool('create_handover', {
-      description: 'Initialize one fictional one-day handover. Never overwrites a plan. Explicit supplied tasks and availability only.',
-      inputSchema: { plan: Plan }
-    }, guarded(({ plan }) => store.create(plan)));
-    server.registerTool('check_coverage', {
-      description: 'Read exact coverage blockers, the first safe next action and last change. Covered means entered tasks only, with simulated acceptance, never business safety.',
-      inputSchema: {}, annotations: { readOnlyHint: true }
-    }, guarded(() => store.read()));
-    server.registerTool('change_handover', {
-      description: 'Apply one version-checked fictional assignment, simulated acceptance, cancellation, time correction or scope confirmation. Read current revision first. No employee messages are sent.',
-      inputSchema: { expectedRevision: z.number().int().positive(), operationId: z.string().regex(/^[a-zA-Z0-9-]{1,80}$/), change: Change }
-    }, guarded(args => store.apply(args)));
+    registerTools(server, store);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on('close', () => { void transport.close(); void server.close(); });
     try { await server.connect(transport); await transport.handleRequest(req, res, req.body); }
