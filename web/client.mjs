@@ -19,6 +19,7 @@ sessionStorage.setItem('ot-session', session);
 
 let client, protocol = '', state = null, op = 0, step = 0, busy = false, auto = false;
 let freeUsed = false, voice = false, speed = 1, cancelled = new Set(), lastPerson = null, qrKey = '';
+let discussedTask = null;
 const mobile = () => matchMedia('(max-width: 900px)').matches;
 const wait = ms => new Promise(r => setTimeout(r, ms / speed));
 document.getElementById('day').textContent = nextSaturday.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -154,8 +155,9 @@ async function route(raw) {
   }
   // 3. Give a task to someone.
   if (who && /\b(give|assign|hand|move|put|switch|send)\b|\bcan (take|do|cover|handle|have)\b|\bwill (take|do|cover|handle)\b|\b(take|takes|cover|covers)\b/i.test(text)) {
-    const t = which ? task(which) : task(state.nextAction?.task ?? '') ?? state.tasks.find(x => !x.covered);
+    const t = which ? task(which) : task(discussedTask ?? '') ?? task(state.nextAction?.task ?? '') ?? state.tasks.find(x => !x.covered);
     if (!t) { await call('check_coverage', {}); return `Everything you entered is already covered. ${explain()}`; }
+    discussedTask = t.id;
     await change({ kind: 'assign', task: t.id, person: who.id });
     const now = task(t.id);
     if (now.blockers.some(b => b.code === 'UNAVAILABLE')) return `I’ve put “${t.label.toLowerCase()}” with ${who.label}, but they aren’t free for all of it, so it isn’t covered. Try someone else.`;
@@ -176,6 +178,7 @@ async function route(raw) {
     const clash = t.blockers.find(b => b.code === 'OVERLAP');
     if (clash && task(clash.with).start > t.start) t = task(clash.with);
     const free = freeFor(t).filter(p => p.id !== t.assignee);
+    discussedTask = t.id;
     return free.length ? `For “${t.label.toLowerCase()}” (${say(t.start)}–${say(t.end)}), ${free.map(p => p.label).join(' and ')} ${free.length > 1 ? 'are' : 'is'} free with no clash. Who should take it?`
       : `Nobody else is free for “${t.label.toLowerCase()}” without a clash.`;
   }
@@ -321,7 +324,7 @@ async function reset() {
   await fetch(`/reset?session=${session}`, { method: 'POST' }).catch(() => {});
   session = newSession(); sessionStorage.setItem('ot-session', session);
   try { await client?.close(); } catch {}
-  client = null; state = null; step = 0; op = 0; freeUsed = false; cancelled = new Set(); lastPerson = null;
+  client = null; state = null; step = 0; op = 0; freeUsed = false; cancelled = new Set(); lastPerson = null; discussedTask = null;
   $('#chat').innerHTML = ''; $('#wire').innerHTML = '<li id="wire-empty" class="muted">Tool calls appear here as Alexa+ makes them.</li>';
   $('#proto').textContent = 'Not connected yet';
   render(); updateControls();
