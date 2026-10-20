@@ -3,6 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { florist as fixture } from '../fixture.mjs';
 import qrcode from 'qrcode-generator';
+import { createMic } from './mic.mjs';
 
 // The fictional plan is always for the next real Saturday, computed on the visitor's device.
 const nextSaturday = (() => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7)); return d; })();
@@ -338,16 +339,18 @@ $('#speed').onclick = () => { speed = speed === 1 ? 2 : 1; $('#speed').textConte
 $('#ask').onsubmit = e => { e.preventDefault(); const v = $('#say').value; $('#say').value = ''; freeText(v); };
 document.querySelectorAll('.ex').forEach(b => b.onclick = () => freeText(b.textContent));
 $('#towire').onclick = e => { e.preventDefault(); $('#wirecard').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
-const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (Rec) {
-  $('#mic').hidden = false;
-  $('#mic').onclick = () => {
-    const rec = new Rec(); rec.lang = 'en-US'; rec.interimResults = false; rec.maxAlternatives = 1;
-    $('#mic').dataset.on = '1'; ring('listening');
-    rec.onresult = e => { const t = e.results[0][0].transcript; freeText(t); };
-    rec.onend = rec.onerror = () => { $('#mic').dataset.on = ''; if (!busy) ring('idle'); };
-    rec.start();
-  };
-}
+// Voice input: permission prompt from the click itself, visible states, live level bar (see mic.mjs).
+const micStatus = $('#micstatus'), micLevel = $('#miclevel');
+const mic = createMic({
+  window, navigator,
+  ui: {
+    status: (text, kind) => { micStatus.textContent = text || ''; micStatus.dataset.kind = kind || ''; micStatus.hidden = !text; },
+    listening: on => { $('#mic').dataset.on = on === 'wait' ? 'wait' : on ? '1' : ''; $('#mic').setAttribute('aria-pressed', on ? 'true' : 'false'); micLevel.hidden = !on; if (on === true) ring('listening'); else if (!on && !busy) ring('idle'); },
+    level: v => { micLevel.firstElementChild.style.width = `${Math.round(v * 100)}%`; if (v > Number(micLevel.dataset.peak || 0)) micLevel.dataset.peak = v.toFixed(3); }
+  },
+  onText: t => freeText(t)
+});
+$('#mic').hidden = false;
+$('#mic').onclick = () => { micLevel.dataset.peak = '0'; mic.toggle(); };
 // Start each page load from a clean server-side plan.
 reset();

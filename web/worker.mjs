@@ -12,6 +12,8 @@ import { HTML } from './page.generated.mjs';
 const SESSION = /^[a-zA-Z0-9-]{8,64}$/;
 const security = {
   'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer',
+  // The page itself may use the microphone (voice turns); nothing else may, and it cannot be framed.
+  'permissions-policy': 'microphone=(self), camera=(), geolocation=()',
   'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'"
 };
 
