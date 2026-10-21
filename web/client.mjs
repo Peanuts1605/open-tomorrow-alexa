@@ -4,6 +4,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { florist as fixture } from '../fixture.mjs';
 import qrcode from 'qrcode-generator';
 import { createMic } from './mic.mjs';
+import { isBareYes } from './intent.mjs';
 
 // The fictional plan is always for the next real Saturday, computed on the visitor's device.
 const nextSaturday = (() => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7)); return d; })();
@@ -165,8 +166,8 @@ async function route(raw) {
     if (now.blockers.some(b => b.code === 'OVERLAP')) return `That makes a clash: ${who.label} would be double-booked. ${explain()}`;
     return `Done. “${t.label}” is with ${who.label}, but assigned isn’t agreed. ${who.label} still needs to say yes. You can scan the helper card to accept as them.`;
   }
-  // 4. That's the whole list.
-  if (/that'?s (everything|all|it)|nothing else|full list|confirm/i.test(text)) {
+  // 4. That's the whole list (a bare "yes" counts only as the answer to "is that every task?").
+  if (/that'?s (everything|all|it)|nothing else|full list|confirm/i.test(text) || (state.nextAction?.code === 'CONFIRM_ENTERED_SCOPE' && isBareYes(text))) {
     await change({ kind: 'confirm_entered_scope', confirmed: true });
     return explain();
   }

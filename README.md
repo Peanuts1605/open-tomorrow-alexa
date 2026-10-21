@@ -60,7 +60,7 @@ Protocol **2025-11-25**, negotiated and verified in the demonstration using `@mo
 - All acceptance is a **simulated helper action**, not identity-authenticated consent. A production acceptance flow is not implemented.
 - The result covers **entered tasks only**. Missing duties are unknown, not safe. This is not labor-law, staffing, travel-time, safety or business-continuity advice.
 - One day, explicit local wall-time minutes, one operator/server process. Multiple processes sharing a store are unsupported. No shift import, optimization, real-time integrations, employee messaging or automatic plan completion is claimed.
-- Loopback only; browser origins rejected. Do not expose this development server to the network. Authentication, multi-user isolation and public hosting are not implemented.
+- The local development server (`npm start`) is loopback only and rejects browser origins. Do not expose it to the network: authentication, multi-user isolation and public hosting are not implemented for it. The public demo is the separate Cloudflare Worker (`web/worker.mjs`), which gives each visitor a private, expiring Durable Object session.
 - No language-model reasoning, Alexa-device execution or end-user validation is claimed. Free-text turns use a deterministic keyword router; the optional mic uses the browser's own speech recognition. The web page simulates the Alexa+ voice layer; its MCP tool calls are real.
 
 ## Contest status and provenance

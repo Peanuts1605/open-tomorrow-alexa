@@ -1,8 +1,8 @@
-# Open Tomorrow for Alexa+ — submission kit (draft)
+# Open Tomorrow for Alexa+ — submission kit
 
 Contest: Amazon Developer Hackathon, Alexa+ track — https://amazonappdev2026.devpost.com (closes Oct 23, 2026, 3:00 PM ET).
 Live demo: https://open-tomorrow-alexa.gigantic-stranger.workers.dev/
-Status: draft for review. Nothing here has been submitted, pushed or posted.
+Source: https://github.com/Peanuts1605/open-tomorrow-alexa
 
 ---
 
@@ -45,7 +45,7 @@ You ask Alexa+, "I'm off Saturday — is the flower shop covered?" Alexa+ calls 
 Making "covered" mean something narrow and true: acceptance is tied to a task version, so any reassignment or retime invalidates old yeses automatically. Keeping the demo honest about what is simulated (voice, helpers) versus real (the tool calls and their rules).
 
 **Accomplishments**
-A judge can break it: type "Helper B can't come", then "Helper B said yes" — Alexa+ refuses to count it. Then hand it to Helper C, accept on a phone, and watch it turn green.
+A judge can watch it refuse to be fooled: press "Start the conversation" and step through. After Helper B cancels, the next turn tries to reuse B's old yes, and the server rejects it live (a red `STALE_OR_WRONG_ASSIGNMENT` error in the wire panel). Then type "Give it to Helper C", accept on a phone from the QR card, and watch the board turn green.
 
 **What we learned**
 The most valuable thing an assistant can say about tomorrow is often "not yet," with the one next step that fixes it.
@@ -65,11 +65,71 @@ Real Alexa+ action wiring to the MCP server, real helper identity on the accept 
 | Sep 11 | Code started: MCP coverage server, tools, tests, reproducible demo. | Commit `ccc3ae0` (2026-09-11 11:02 ET). |
 | Oct 1 | Deterministic `nextAction` guidance. | Commit `2d74643`. |
 | Oct 16 (morning) | Web layer: simulated Alexa+ page, Cloudflare Worker, Durable Object sessions. | Commit `879d3a4` (2026-10-16 13:41 ET). |
-| Oct 16 (afternoon) | Today's additions: free-text/mic turns via deterministic intent router, QR helper-accept flow, "Play all" ends covered via Helper C, next-Saturday date, 2× speed, mobile polish, no console errors, retitle, this submission kit. | Commit on branch `alexa-sim-web` (this file's commit). |
+| Oct 16 (afternoon) | Free-text/mic turns via deterministic intent router, QR helper-accept flow, "Play all" ends covered via Helper C, next-Saturday date, 2× speed, mobile polish, no console errors, retitle, this submission kit. | Commit `c9484f5` (2026-10-16 14:20 ET). |
+| Oct 20 | Review fix: "give it to …" keeps the task that was just discussed; video script no longer resets mid-demo. | Commit `afbecce` (2026-10-20 17:28 ET). |
+| Oct 20 | Microphone fix: permission is requested inside the click, with visible states and a level meter. | Commit `bea90c1` (2026-10-20 19:24 ET). |
+| Oct 21 | Microphone permission cancel/retry race guarded, with tests. | Commit `1098f153` (2026-10-21 09:48 ET). |
+| Oct 21 | Footer links to this repository, bare "yes" confirms the task list, product feedback, README wording. | Branch `mag82-fulcro-fixes` (2026-10-21). |
 
 All code in this repository was written after Aug 31, 2026.
 
-## 5. Friction log / product feedback
+## 5. Product feedback (per tool) and friction log
+
+Lines marked [CONFIRM] are opinions Maggy must confirm or edit before pasting into Devpost. Everything else is taken from the commits, the build notes and the deploy records.
+
+### 5.1 Model Context Protocol TypeScript SDK (`@modelcontextprotocol/sdk` 1.30.0)
+- **Used for:** the whole MCP layer. `McpServer` + `StreamableHTTPServerTransport` for the local Node server (`server.mjs`); `Client` + `StreamableHTTPClientTransport` for the scripted proof (`demo.mjs`), the smoke test (`web/smoke.mjs`) and the in-browser client on the judge page; `WebStandardStreamableHTTPServerTransport` inside the Cloudflare Worker (`web/worker.mjs`). Protocol 2025-11-25 is negotiated and asserted in the demo and the smoke test.
+- **What worked well:**
+  - The same three tools ran unchanged in Node and in a Worker; only the transport differs.
+  - Protocol version negotiation worked and was easy to assert in tests.
+  - `structuredContent` let the voice layer read exact blockers and one `nextAction` instead of parsing text.
+  - [CONFIRM] Server and client APIs mirror each other, which made an end-to-end test in one script easy.
+- **What needs work:**
+  - The web-standard (serverless) transport isn't in the getting-started docs; we found it in the SDK's dist folder.
+  - Stateless, JSON-only servers have no official recipe; we inferred `sessionIdGenerator: undefined` + `enableJsonResponse: true`.
+  - The client always probes `GET /mcp` for an SSE stream. Our JSON-only server correctly answers 405, but browsers log it as an error, so we answer the probe inside the client's custom `fetch`.
+  - The bundled browser client (with Zod and JSON-schema validation) is about 300 KB minified.
+- **Onboarding (zero to hello world):** [CONFIRM] Zero to a working hello-world tool in under an hour with the modelcontextprotocol.io getting-started guide.
+- **Would we build with it again?** [CONFIRM] Yes. One server works for any MCP-capable agent, which is why Alexa+ using MCP matters to small builders.
+
+### 5.2 Cloudflare Workers + Durable Objects
+- **Used for:** hosting the judge page and the MCP endpoint in one Worker (`web/worker.mjs`), with one Durable Object (`HandoverSession`) per visitor holding that visitor's plan. A Durable Object alarm clears the session after a day.
+- **What worked well:**
+  - The MCP SDK's web-standard transport ran in the Worker with no changes to the tool code.
+  - Per-visitor state needed no database: each session ID maps to its own Durable Object.
+  - Redeploys kept the same Durable Object binding with no migration step, and earlier versions stayed available for a one-call rollback.
+  - [CONFIRM] For a small, stateful demo, Workers + Durable Objects felt like the right size of tool.
+- **What needs work:**
+  - There is no official example of running an MCP server inside a Durable Object; we assembled it from SDK source and Cloudflare docs.
+  - [CONFIRM] Choosing between `nodejs_compat` and web-standard code paths took trial and error.
+- **Onboarding (zero to hello world):** [CONFIRM] Quick for a plain Worker; the Durable Object + MCP combination took longer because of the missing example.
+- **Would we build with it again?** [CONFIRM] Yes, for small stateful demos like this one.
+
+### 5.3 Web Speech API (browser `SpeechRecognition` and `speechSynthesis`)
+- **Used for:** optional spoken Alexa+ replies ("Voice", `speechSynthesis`) and the optional microphone input (`SpeechRecognition` / `webkitSpeechRecognition`, `web/mic.mjs`). Recognized text goes through the same deterministic router as typed text.
+- **What worked well:**
+  - Free and built into the browser: no keys, accounts or servers.
+  - Speech synthesis needed only a few lines, including the 2× speed option.
+- **What needs work:**
+  - The microphone was silent until we requested `getUserMedia` directly inside the click and added a `Permissions-Policy` header (commit `bea90c1`).
+  - Recognition error codes (`not-allowed`, `service-not-allowed`, `network`, `no-speech`, `audio-capture`) each needed our own plain-language message, or the mic just looked broken (also commit `bea90c1`).
+  - A cancelled permission prompt followed by a quick retry could let the old attempt interfere with the new one; we added a per-attempt guard and tests (commit `1098f153`).
+  - Support differs by browser, so the page always offers typing as well.
+- **Onboarding (zero to hello world):** [CONFIRM] Speech output worked on the first try; reliable microphone input took three rounds of fixes.
+- **Would we build with it again?** [CONFIRM] Yes for prototypes. A real Alexa+ voice path would replace it in production.
+
+### 5.4 Wrangler (Cloudflare CLI, 4.x)
+- **Used for:** local development of the Worker (`npx wrangler dev`, configured by `wrangler.toml`) and as the documented deploy path in the README.
+- **What worked well:**
+  - `wrangler dev` gave a local Worker with Durable Object state on disk, so the end-to-end smoke test could run before any deploy.
+  - [CONFIRM] One `wrangler.toml` was enough configuration for the Worker and its Durable Object binding.
+- **What needs work:**
+  - Wrangler requires Node 22+. Our build machine had Node 20, so we ran it through `npx node@22`. A clearer error at the start would save time.
+  - Our build machine deploys went through the Cloudflare API (a script upload with the same Durable Object binding) instead of `wrangler deploy`, so on our side Wrangler was used for local runs, not production deploys.
+- **Onboarding (zero to hello world):** [CONFIRM] Fast once the Node version was sorted out.
+- **Would we build with it again?** [CONFIRM] Yes.
+
+### Friction log (kept from the Oct 16 build)
 
 - **MCP Streamable HTTP, JSON-only servers:** the TypeScript client always probes `GET /mcp` for an SSE stream. A JSON-response server correctly answers 405, but browsers log it as a console error that looks like a bug to judges. We answer that probe locally in the client's custom `fetch`. A client option to skip the GET stream would help.
 - **Stateless transport + Durable Objects:** running a fresh `McpServer` per request inside a Durable Object works well, but there is no official example for Workers + DO with the SDK's web-standard transport; we pieced it together from source.
