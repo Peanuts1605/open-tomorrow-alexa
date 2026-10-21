@@ -26,6 +26,33 @@ export function speechMessage(code) {
   }[code] ?? (code ? `Speech recognition stopped (${code}). Tap 🎤 to try again.` : null);
 }
 
+// Speech-to-text tuning for this page's tiny vocabulary. A general-purpose recognizer hears "Helper C" as
+// "help her see", "Helper B" as "helper be", and so on, and with only one alternative the router gets the wrong words.
+const LETTER = { a: 'A', ay: 'A', eh: 'A', hey: 'A', b: 'B', be: 'B', bee: 'B', c: 'C', see: 'C', sea: 'C', si: 'C', cee: 'C' };
+export function normalizeTranscript(raw) {
+  let t = String(raw ?? '').replace(/\s+/g, ' ').trim();
+  // "help her see", "helper sea", "hyper c", "help a b" → "Helper C" / "Helper B"
+  t = t.replace(/\b(?:help(?:er|a|ers)?|help her|hyper|halper|elper)\s*[-.]?\s*(a|ay|eh|hey|b|be|bee|c|see|sea|si|cee)\b\.?/gi, (_, l) => `Helper ${LETTER[l.toLowerCase()]}`);
+  t = t.replace(/\bdelivered\b(?=\s*(?:to|with|for|$))/gi, 'delivery').replace(/\bset-?up\b/gi, 'setup');
+  return t;
+}
+const VOCAB = /\bhelper [abc]\b|\bdeliver|\bsetup\b|\bset up\b|\bfree\b|\bavailable\b|\baccept|\bcancel|\bcan'?t come\b|\bcovered\b|\bthat'?s (?:everything|all|it)\b/gi;
+export function scoreTranscript(text) { return (String(text).match(VOCAB) ?? []).length; }
+// results: a SpeechRecognitionResultList-like array. Joins every segment and, per segment, picks the alternative that
+// mentions the most of this page's words (ties keep the recognizer's own first choice).
+export function readResults(results, from = 0) {
+  let text = '', isFinal = true;
+  for (let i = from; i < results.length; i++) {
+    const r = results[i], alts = [];
+    for (let j = 0; j < r.length; j++) if (r[j]?.transcript != null) alts.push(normalizeTranscript(r[j].transcript));
+    let best = alts[0] ?? '', bestScore = scoreTranscript(best);
+    for (const a of alts.slice(1)) { const sc = scoreTranscript(a); if (sc > bestScore) { best = a; bestScore = sc; } }
+    text += (text && best ? ' ' : '') + best;
+    if (!r.isFinal) isFinal = false;
+  }
+  return { text: text.trim(), isFinal };
+}
+
 // env: { window, navigator, Rec, ui: { status(text, kind), listening(on|'wait'|false), level(0..1) }, onText(text), timeoutMs }
 export function createMic(env) {
   const { navigator: nav, ui, onText } = env;
@@ -75,10 +102,10 @@ export function createMic(env) {
         ui.listening(true); ui.status('Your microphone works, but this browser can’t turn speech into text. Use Chrome or Safari, or type below.', 'error');
         s.timer = setTimeout(release, 2500); return 'no-recognition';
       }
-      const rec = s.rec = new Rec(); rec.lang = 'en-US'; rec.interimResults = true; rec.maxAlternatives = 1; rec.continuous = false;
+      const rec = s.rec = new Rec(); rec.lang = env.lang ?? 'en-US'; rec.interimResults = true; rec.maxAlternatives = 5; rec.continuous = false;
       rec.onresult = e => {
-        const r = e.results[e.results.length - 1]; const text = r[0].transcript.trim();
-        if (!r.isFinal) { ui.status(`🎙️ “${text}…”`, 'live'); return; }
+        const { text, isFinal } = readResults(e.results);
+        if (!isFinal) { ui.status(`🎙️ “${text}…”`, 'live'); return; }
         if (!text) return;
         s.heard = true; ui.status(`Heard: “${text}”`, 'ok'); onText(text);
       };
