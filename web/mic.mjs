@@ -32,9 +32,10 @@ export function createMic(env) {
   const Rec = env.Rec === undefined ? (env.window.SpeechRecognition || env.window.webkitSpeechRecognition) : env.Rec;
   const AC = env.window.AudioContext || env.window.webkitAudioContext;
   const timeoutMs = env.timeoutMs ?? 10000;
-  const s = { stream: null, rec: null, ctx: null, raf: 0, timer: 0, heard: false, error: null, peak: 0, active: false };
+  const s = { stream: null, rec: null, ctx: null, raf: 0, timer: 0, heard: false, error: null, peak: 0, active: false, generation: 0 };
 
   function release() {
+    s.generation++;
     clearTimeout(s.timer); s.timer = 0;
     if (s.raf) (env.window.cancelAnimationFrame || clearTimeout)(s.raf); s.raf = 0;
     s.stream?.getTracks().forEach(t => t.stop()); s.stream = null;
@@ -64,10 +65,11 @@ export function createMic(env) {
     if (env.window.isSecureContext === false) { ui.status(gumMessage({ name: 'SecurityError' }), 'error'); return Promise.resolve('insecure'); }
     if (!nav?.mediaDevices?.getUserMedia) { ui.status(Rec ? 'This browser can’t open the microphone here. Type instead.' : 'Voice input isn’t supported in this browser. Use Chrome or Safari, or type instead.', 'error'); return Promise.resolve('unsupported'); }
     s.active = true; s.heard = false; s.error = null; s.peak = 0;
+    const generation = ++s.generation;
     const pending = nav.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); // synchronous, inside the gesture
     ui.listening('wait'); ui.status('Asking for the microphone… click “Allow” if your browser asks.', 'wait');
     return pending.then(stream => {
-      if (!s.active) { stream.getTracks().forEach(t => t.stop()); return 'stopped'; }
+      if (!s.active || generation !== s.generation) { stream.getTracks().forEach(t => t.stop()); return 'stopped'; }
       s.stream = stream; meter(stream);
       if (!Rec) {
         ui.listening(true); ui.status('Your microphone works, but this browser can’t turn speech into text. Use Chrome or Safari, or type below.', 'error');
@@ -86,7 +88,7 @@ export function createMic(env) {
       ui.listening(true); ui.status('🎙️ Listening… speak now (tap 🎤 again to stop).', 'live');
       s.timer = setTimeout(() => { try { rec.stop(); } catch { finish(); } }, timeoutMs);
       return 'listening';
-    }, e => { release(); ui.status(gumMessage(e), 'error'); return 'denied'; });
+    }, e => { if (generation !== s.generation) return 'stopped'; release(); ui.status(gumMessage(e), 'error'); return 'denied'; });
   }
   return { toggle, state: s, supported: !!(nav?.mediaDevices?.getUserMedia) };
 }
