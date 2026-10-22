@@ -4,6 +4,10 @@ compatibility_date = "2026-10-15"
 compatibility_flags = ["nodejs_compat"]
 no_bundle = true
 
+# Workers AI (free daily allocation; the Worker caps its own use, see web/ai.mjs)
+[ai]
+binding = "AI"
+
 [[durable_objects.bindings]]
 name = "SESSIONS"
 class_name = "HandoverSession"

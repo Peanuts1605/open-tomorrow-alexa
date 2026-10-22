@@ -1,10 +1,12 @@
-// Browser side: a real MCP client (official SDK) driving a scripted Alexa+-style conversation.
+// Browser side: a real MCP client (official SDK) driving a scripted Alexa+-style conversation, plus an MCP Apps
+// host (AppBridge) that renders the server's handover-board view in a sandboxed iframe.
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { AppBridge, PostMessageTransport } from '@modelcontextprotocol/ext-apps/app-bridge';
 import { florist as fixture } from '../fixture.mjs';
 import qrcode from 'qrcode-generator';
 import { createMic } from './mic.mjs';
-import { isBareYes } from './intent.mjs';
+import { isBareYes, CANT_COME, SAID_YES, ASSIGN, CONFIRM, WHO_FREE, STATUS } from './intent.mjs';
 
 // The fictional plan is always for the next real Saturday, computed on the visitor's device.
 const nextSaturday = (() => { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7)); return d; })();
@@ -43,6 +45,33 @@ async function connect() {
   await client.connect(transport);
   const { tools } = await client.listTools();
   $('#proto').textContent = `MCP ${protocol} · Streamable HTTP · ${tools.length} tools: ${tools.map(t => t.name).join(', ')}`;
+  await mountApp(tools).catch(() => { $('#appframe').innerHTML = '<p class="muted small">This host could not load the MCP App view.</p>'; });
+}
+
+// ---------- MCP Apps host: read the tool's ui:// resource and render it in a sandboxed iframe ----------
+let bridge = null, appReady = false, lastResult = null;
+async function mountApp(tools) {
+  const uri = tools.find(t => t.name === 'check_coverage')?._meta?.ui?.resourceUri;
+  if (!uri) return;
+  const { contents } = await client.readResource({ uri });
+  const frame = document.createElement('iframe');
+  frame.title = 'Handover board (MCP App view)';
+  frame.setAttribute('sandbox', 'allow-scripts'); // no same-origin: the view cannot read this page, its storage or cookies
+  $('#appframe').replaceChildren(frame);
+  $('#appuri').textContent = uri;
+  const b = new AppBridge(null, { name: 'alexa-plus-simulator', version: '0.3.0' }, { serverTools: {} }, { hostContext: { theme: 'dark', platform: 'web' } });
+  // The view's buttons call tools through the host, so they show up in the MCP wire like any other call.
+  b.oncalltool = async ({ name, arguments: args }) => (await call(name, args ?? {})).raw;
+  b.onsizechange = ({ height }) => { if (height) frame.style.height = `${Math.min(Math.ceil(height), 560)}px`; };
+  b.oninitialized = () => { appReady = true; if (lastResult) b.sendToolResult(lastResult); };
+  await b.connect(new PostMessageTransport(frame.contentWindow, frame.contentWindow));
+  bridge = b;
+  frame.srcdoc = contents[0].text;
+}
+async function unmountApp() {
+  const b = bridge; bridge = null; appReady = false; lastResult = null;
+  try { await b?.close(); } catch {}
+  $('#appframe').innerHTML = '<p class="muted small">Appears after the first tool call.</p>';
 }
 
 async function call(name, args) {
@@ -52,9 +81,9 @@ async function call(name, args) {
   const ms = Math.round(performance.now() - t0);
   const value = r.isError ? null : (r.structuredContent ?? JSON.parse(r.content[0].text));
   finishWire(entry, r, value, ms);
-  if (value) state = value.current ?? value;
+  if (value) { state = value.current ?? value; lastResult = r; if (appReady) bridge?.sendToolResult(r).catch(() => {}); }
   render();
-  return { error: r.isError ? r.content?.[0]?.text : null, value };
+  return { error: r.isError ? r.content?.[0]?.text : null, value, raw: r };
 }
 async function change(c) {
   const send = () => call('change_handover', { expectedRevision: state.revision, operationId: `alexa-${session.slice(0, 8)}-${++op}`, change: c });
@@ -108,7 +137,38 @@ const turns = [
       return state.status === 'ENTERED_TASKS_COVERED' ? 'That one counts: a fresh yes for the current assignment. You’re covered ✅ for every task you gave me. Enjoy your Saturday off.' : explain(); } }
 ];
 
-// ---------- free-text turns: a deterministic intent router over the same MCP tools (no language model) ----------
+// ---------- free-text turns ----------
+// 1. Workers AI (Llama 3.3 70B, JSON-schema output) turns loose speech into 1-3 structured steps. The Worker checks
+//    every id against the plan and rewrites each step as a plain sentence the rule-based router below understands.
+// 2. That deterministic router (no language model) makes the actual MCP tool calls, exactly as before.
+// If the model is unavailable, slow, over budget or unsure, the router handles the raw text on its own.
+async function viaAI(text) {
+  const li = wire('Workers AI · interpret', { text, lastPerson: lastPerson?.id ?? null });
+  li.classList.add('ai');
+  const t0 = performance.now();
+  let d;
+  try {
+    const r = await fetch(`/api/interpret?session=${session}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, lastPerson: lastPerson?.id ?? null }) });
+    d = await r.json();
+  } catch { d = { fallback: 'NETWORK' }; }
+  const ms = Math.round(performance.now() - t0);
+  li.classList.remove('pending'); li.classList.add(d.steps ? 'ok' : 'fallback');
+  li.querySelector('.meta').textContent = `${ms} ms`;
+  const summary = d.steps ? `→ ${d.steps.map(s => `“${s.say}”`).join(' then ')}` : `keyword router instead (${d.fallback})`;
+  li.insertAdjacentHTML('beforeend', `<p class="summary">${esc(summary)}</p><details><summary>result</summary><pre>${esc(JSON.stringify(d, null, 2))}</pre></details>`);
+  return d.steps ?? null;
+}
+async function understand(text) {
+  if (!state?.tasks) return route(text);
+  const steps = await viaAI(text.trim());
+  if (!steps) return route(text);
+  const replies = [];
+  for (const s of steps) replies.push(await route(s.say));
+  // Several steps: keep the first sentence of each earlier reply, then the full last one.
+  return replies.map((r, i) => i < replies.length - 1 ? r.split(/(?<=[.!?])\s/)[0] : r).join(' ');
+}
+
+// Deterministic intent router over the same MCP tools (no language model).
 const PEOPLE = florist.people;
 function findPerson(text) {
   const m = text.match(/\bhelper\s*([a-z])\b/i) ?? text.match(/\b([abc])\b(?=\s+(?:can|is|will|said|says|accept|took|takes|cancel|won|isn|doesn|has|just))/i);
@@ -137,13 +197,13 @@ async function route(raw) {
   const who = findPerson(text);
   const which = findTask(text);
   // 1. Someone can't come.
-  if (/\b(can'?t|cannot|can not|won'?t|isn'?t|not)\s+(come|make it|do it|work|coming|able|available)|cancel|called (in )?sick|is (out|sick|off)|dropped out|bail/i.test(text)) {
+  if (CANT_COME.test(text)) {
     if (!who) return 'Who can’t come? Say “Helper A”, “Helper B” or “Helper C”.';
     await change({ kind: 'cancel', person: who.id });
     return `Okay, I’ve taken ${who.label} off. ${explain()}`;
   }
   // 2. A helper said yes (simulated acceptance of the CURRENT assignment only).
-  if (/\b(said|says|say) (yes|ok|okay)|accept|agreed|is in\b|confirmed it|on board/i.test(text) && !/that'?s (everything|all)/i.test(text)) {
+  if (SAID_YES.test(text) && !/that'?s (everything|all)/i.test(text)) {
     const mine = pending().filter(t => !who || t.assignee === who.id).filter(t => !which || t.id === which);
     if (!mine.length) {
       if (who) {
@@ -159,7 +219,7 @@ async function route(raw) {
     return explain();
   }
   // 3. Give a task to someone.
-  if (who && /\b(give|assign|hand|move|put|switch|send)\b|\bcan (take|do|cover|handle|have)\b|\bwill (take|do|cover|handle)\b|\b(take|takes|cover|covers)\b/i.test(text)) {
+  if (who && ASSIGN.test(text)) {
     const t = which ? task(which) : task(discussedTask ?? '') ?? task(state.nextAction?.task ?? '') ?? state.tasks.find(x => !x.covered);
     if (!t) { await call('check_coverage', {}); return `Everything you entered is already covered. ${explain()}`; }
     discussedTask = t.id;
@@ -170,12 +230,12 @@ async function route(raw) {
     return `Done. “${t.label}” is with ${who.label}, but assigned isn’t agreed. ${who.label} still needs to say yes. You can scan the helper card to accept as them.`;
   }
   // 4. That's the whole list (a bare "yes" counts only as the answer to "is that every task?").
-  if (/that'?s (everything|all|it)|nothing else|full list|confirm/i.test(text) || (state.nextAction?.code === 'CONFIRM_ENTERED_SCOPE' && isBareYes(text))) {
+  if (CONFIRM.test(text) || (state.nextAction?.code === 'CONFIRM_ENTERED_SCOPE' && isBareYes(text))) {
     await change({ kind: 'confirm_entered_scope', confirmed: true });
     return explain();
   }
   // 5. Who's free?
-  if (/who'?s? (is )?(free|available|around)|anyone (free|available|else)|who (else )?can/i.test(text)) {
+  if (WHO_FREE.test(text)) {
     await call('check_coverage', {});
     let t = task(state.nextAction?.task ?? '') ?? state.tasks.find(x => !x.covered);
     if (!t) return `Nobody needs to step in. ${explain()}`;
@@ -188,7 +248,7 @@ async function route(raw) {
       : `Nobody else is free for “${t.label.toLowerCase()}” without a clash.`;
   }
   // 6. Where do we stand?
-  if (/uncovered|stand|covered|status|gap|left|missing|are we (good|ok|okay|set)|check|how('?s| is| are)/i.test(text)) {
+  if (STATUS.test(text)) {
     await call('check_coverage', {});
     return state.uncoveredTasks.length ? `${state.uncoveredTasks.length === 1 ? 'One task is' : `${state.uncoveredTasks.length} tasks are`} not covered yet. ${explain()}` : explain();
   }
@@ -202,7 +262,7 @@ async function freeText(text) {
     ring('listening'); bubble('you', text.trim(), true);
     await wait(350);
     ring('thinking');
-    const reply = await route(text);
+    const reply = await understand(text);
     ring('speaking'); bubble('alexa', reply);
     await speak(reply);
   } catch (e) { bubble('alexa', `Sorry, I couldn’t reach Open Tomorrow (${e.message}). Try reset.`); }
@@ -334,6 +394,7 @@ async function reset() {
   busy = true; updateControls();
   await fetch(`/reset?session=${session}`, { method: 'POST' }).catch(() => {});
   session = newSession(); sessionStorage.setItem('ot-session', session);
+  await unmountApp();
   try { await client?.close(); } catch {}
   client = null; state = null; step = 0; op = 0; freeUsed = false; cancelled = new Set(); lastPerson = null; discussedTask = null;
   $('#chat').innerHTML = ''; $('#wire').innerHTML = '<li id="wire-empty" class="muted">Tool calls appear here as Alexa+ makes them.</li>';

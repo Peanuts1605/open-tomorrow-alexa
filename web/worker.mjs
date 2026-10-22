@@ -8,6 +8,11 @@ import { CoverageStore } from '../coverage.mjs';
 import { HELPER_HTML } from './helper.mjs';
 import { registerTools } from '../tools.mjs';
 import { HTML } from './page.generated.mjs';
+import { interpret, DAILY_CAP, SESSION_CAP, utcDay } from './ai.mjs';
+
+// One extra Durable Object holds the global Workers AI call counter. Its name contains '_', which the visitor
+// session pattern below rejects, so no visitor request can reach or reset it.
+const BUDGET = 'ai_budget';
 
 const SESSION = /^[a-zA-Z0-9-]{8,64}$/;
 const security = {
@@ -20,6 +25,14 @@ const security = {
 export class HandoverSession extends DurableObject {
   async fetch(request) {
     const url = new URL(request.url);
+    if (url.pathname === '/budget') {
+      // Global daily cap: keeps Workers AI use far below the free daily allocation, so the AI layer costs $0.
+      const key = `calls:${utcDay()}`, used = (await this.ctx.storage.get(key)) ?? 0;
+      if (used >= DAILY_CAP) return Response.json({ ok: false, used });
+      await this.ctx.storage.put(key, used + 1);
+      await this.ctx.storage.setAlarm(Date.now() + 2 * 86_400_000);
+      return Response.json({ ok: true, used: used + 1 });
+    }
     if (url.pathname === '/reset') { await this.ctx.storage.deleteAll(); return new Response(null, { status: 204 }); }
     let plan = (await this.ctx.storage.get('plan')) ?? null;
     let dirty = false;
@@ -44,7 +57,21 @@ export class HandoverSession extends DurableObject {
         return Response.json({ ok: true, revision: r.appliedRevision, status: r.current.status });
       } catch (e) { return Response.json({ error: e.message }, { status: 409 }); }
     }
-    const server = new McpServer({ name: 'open-tomorrow', version: '0.2.0' });
+    if (url.pathname === '/interpret') {
+      // Optional language layer: Workers AI proposes 1-3 structured steps; the browser still routes each one through
+      // the deterministic rules and the MCP tools. Any failure returns { fallback } and the keyword router takes over.
+      let body; try { body = await request.json(); } catch { return Response.json({ fallback: 'BAD_JSON' }, { status: 400 }); }
+      const used = (await this.ctx.storage.get('aiCalls')) ?? 0;
+      const spend = async () => {
+        if (used >= SESSION_CAP) return false;
+        await this.ctx.storage.put('aiCalls', used + 1);
+        const budget = this.env.SESSIONS.get(this.env.SESSIONS.idFromName(BUDGET));
+        try { return (await (await budget.fetch('https://session/budget', { method: 'POST' })).json()).ok === true; } catch { return false; }
+      };
+      const out = await interpret({ ai: this.env.AI, text: body?.text, plan, lastPerson: typeof body?.lastPerson === 'string' ? body.lastPerson : null, spend });
+      return Response.json(out, { headers: { 'cache-control': 'no-store' } });
+    }
+    const server = new McpServer({ name: 'open-tomorrow', version: '0.3.0' });
     registerTools(server, store);
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     await server.connect(transport);
@@ -64,7 +91,7 @@ export default {
       return new Response(HTML, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300', ...security } });
     if (url.pathname === '/helper')
       return new Response(HELPER_HTML, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300', ...security } });
-    const route = { '/mcp': '/mcp', '/reset': '/reset', '/api/summary': '/summary', '/api/accept': '/accept' }[url.pathname];
+    const route = { '/mcp': '/mcp', '/reset': '/reset', '/api/summary': '/summary', '/api/accept': '/accept', '/api/interpret': '/interpret' }[url.pathname];
     if (route) {
       const origin = request.headers.get('origin');
       if (origin && origin !== url.origin) return Response.json({ error: 'Cross-origin requests are not enabled for this demo.' }, { status: 403 });
@@ -73,6 +100,7 @@ export default {
       if (url.pathname === '/reset' && request.method !== 'POST') return new Response(null, { status: 405 });
       if (url.pathname === '/mcp' && request.method !== 'POST') return new Response(null, { status: 405, headers: { allow: 'POST' } });
       if (url.pathname === '/api/accept' && request.method !== 'POST') return new Response(null, { status: 405, headers: { allow: 'POST' } });
+      if (url.pathname === '/api/interpret' && (request.method !== 'POST' || Number(request.headers.get('content-length') ?? 0) > 4096)) return new Response(null, { status: request.method !== 'POST' ? 405 : 413, headers: { allow: 'POST' } });
       if (url.pathname === '/api/summary' && request.method !== 'GET') return new Response(null, { status: 405, headers: { allow: 'GET' } });
       const stub = env.SESSIONS.get(env.SESSIONS.idFromName(session));
       const r = await stub.fetch(new Request(new URL(route, 'https://session'), request));

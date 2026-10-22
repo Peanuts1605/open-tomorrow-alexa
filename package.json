@@ -9,6 +9,7 @@
     "demo": "node demo.mjs"
   },
   "dependencies": {
+    "@modelcontextprotocol/ext-apps": "1.7.5",
     "@modelcontextprotocol/sdk": "1.30.0",
     "zod": "^4.0.0"
   },

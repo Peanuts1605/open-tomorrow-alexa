@@ -62,6 +62,8 @@ details summary{cursor:pointer;color:var(--muted);font-size:12px}pre{margin:6px 
 @media(max-width:900px){#towire{display:inline-block}}
 .qrwrap{display:flex;gap:16px;align-items:center}#qr{width:132px;height:132px;background:#fff;border-radius:12px;padding:8px;flex:none}#qr svg{width:100%;height:100%;display:block}
 #qrask{margin:0 0 6px;font-weight:700;font-size:16px}.small{font-size:12.5px;margin:0}
+#appframe{margin-top:10px}#appframe iframe{display:block;width:100%;height:250px;border:1px solid var(--line,#24324f);border-radius:12px;background:#0f1830}
+.call.ai .tool{color:#c4b5fd}.call.fallback{border-color:#7c6f3a}
 #speed[aria-pressed="true"]{border-color:var(--cyan);color:var(--cyan)}
 .turn.you.typed p{background:#33305e}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
@@ -83,6 +85,9 @@ footer{max-width:1180px;margin:0 auto;padding:0 24px 40px;color:var(--muted);fon
 </section>
 <div class="side">
   <section class="card pad" aria-label="Handover board"><div class="head"><h2>Saturday handover · <span id="day">this week</span></h2><span id="status" class="status idle">No plan</span></div><div id="board"></div></section>
+  <section class="card pad" id="appcard" aria-label="MCP App card"><div class="head"><h2>MCP App card</h2><span class="meta" id="appuri">ui://</span></div>
+    <p class="muted small">What an MCP Apps host shows: the server ships this board as a <code>ui://</code> resource, and this page renders it in a sandboxed iframe that talks back over postMessage. Its Refresh button calls <code>check_coverage</code> through the host.</p>
+    <div id="appframe"><p class="muted small">Appears after the first tool call.</p></div></section>
   <section class="card pad" id="qrcard" aria-label="Helper phone card" hidden><div class="head"><h2>Ask the helper on a phone</h2><span class="status warn">Awaiting yes</span></div>
     <div class="qrwrap"><a id="qrlink" target="_blank" rel="noopener" aria-label="Open the helper card"><div id="qr" aria-hidden="true"></div></a><div><p id="qrask"></p><p class="muted small">Scan with a phone camera and tap Accept. This screen flips on its own. The acceptance is simulated and nobody real is contacted.</p></div></div></section>
   <section class="card pad" id="wirecard" aria-label="MCP tool calls"><div class="head"><h2>MCP wire</h2><span class="meta">POST /mcp</span></div><p id="proto">Not connected yet</p><ol id="wire"></ol></section>

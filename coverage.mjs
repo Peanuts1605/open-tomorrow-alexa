@@ -72,6 +72,7 @@ export function assess(state) {
     text: 'Review whether any duties were omitted, then confirm only the entered scope; this does not verify real-world coverage.'
   };
   return { title: state.title, date: state.date, revision: state.revision,
+    people: state.people.map(p => ({ id: p.id, label: p.label })),
     status: complete ? 'ENTERED_TASKS_COVERED' : 'NEEDS_ATTENTION',
     statement: complete ? 'All entered tasks have simulated accepted coverage.' : 'The entered handover still needs attention.',
     scopeConfirmed: state.scopeConfirmed, uncoveredTasks: tasks.filter(t => !t.covered).map(t => t.id), nextAction,
