@@ -21,7 +21,7 @@ sessionStorage.setItem('ot-session', session);
 
 let client, protocol = '', state = null, op = 0, step = 0, busy = false, auto = false;
 let freeUsed = false, voice = false, speed = 1, cancelled = new Set(), lastPerson = null, qrKey = '';
-let discussedTask = null;
+let discussedTask = null, resetQueued = false;
 const mobile = () => matchMedia('(max-width: 900px)').matches;
 const wait = ms => new Promise(r => setTimeout(r, ms / speed));
 document.getElementById('day').textContent = nextSaturday.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -80,7 +80,10 @@ function explain() {
     return `Better. No more clashes. But ${waiting.map(t => `${person(t.assignee)} hasn’t accepted “${t.label.toLowerCase()}”`).join(', and ')} yet. Assigned isn’t the same as agreed.`;
   }
   if (n.code === 'CONFIRM_ENTERED_SCOPE') return 'Both helpers have accepted. One last check: is that every task for Saturday? I can only vouch for what you’ve told me.';
-  if (n.code === 'UNASSIGNED') return `“${task(n.task).label}” has nobody now. ${state.tasks.filter(t => t.covered).map(t => `“${t.label}” is still fine with ${person(t.assignee)}`).join('. ')}. Who should take it?`;
+  if (n.code === 'UNASSIGNED') {
+    const fine = state.tasks.filter(t => t.covered).map(t => `“${t.label}” is still fine with ${person(t.assignee)}. `).join('');
+    return `“${task(n.task).label}” has nobody now. ${fine}Who should take it?`;
+  }
   if (n.code === 'UNAVAILABLE') return `${person(task(n.task).assignee)} isn’t free for all of “${task(n.task).label.toLowerCase()}”.`;
   return state.statement;
 }
@@ -203,7 +206,7 @@ async function freeText(text) {
     ring('speaking'); bubble('alexa', reply);
     await speak(reply);
   } catch (e) { bubble('alexa', `Sorry, I couldn’t reach Open Tomorrow (${e.message}). Try reset.`); }
-  finally { ring('idle'); busy = false; updateControls(); }
+  finally { ring('idle'); busy = false; updateControls(); if (resetQueued) reset(); }
 }
 
 // ---------- QR helper card: a phone accepts the current assignment; this screen polls a tiny read endpoint ----------
@@ -233,7 +236,7 @@ setInterval(async () => {
     const reply = `${who.length ? `${who.join(' and ')} just accepted on their phone. ` : ''}${state.status === 'ENTERED_TASKS_COVERED' ? 'That’s a fresh yes for the current assignment. You’re covered ✅ for every task you gave me.' : explain()}`;
     ring('speaking'); bubble('alexa', reply); await speak(reply);
     if (state.status === 'ENTERED_TASKS_COVERED' && mobile()) $('#board').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } catch {} finally { if (busy) { ring('idle'); busy = false; updateControls(); } }
+  } catch {} finally { if (busy) { ring('idle'); busy = false; updateControls(); if (resetQueued) reset(); } }
 }, 2000);
 
 // ---------- rendering ----------
@@ -314,22 +317,28 @@ async function next() {
     bubble('alexa', `Sorry, I couldn’t reach Open Tomorrow (${e.message}). Try reset.`);
     auto = false;
   } finally { ring('idle'); busy = false; updateControls(); }
-  if (auto && step < turns.length) setTimeout(next, (voice ? 400 : 1200) / speed);
+  if (resetQueued) return reset();
+  // Re-check auto when the timer fires: Reset (or free text) in the gap must stop the story.
+  if (auto && step < turns.length) setTimeout(() => { if (auto) next(); }, (voice ? 400 : 1200) / speed);
   else {
     if (auto && step >= turns.length && mobile()) $('#board').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
     auto = false;
   }
 }
 async function reset() {
-  if (busy) return;
   auto = false; speechSynthesis?.cancel?.();
+  // A turn is in flight: finish it, then reset (instead of silently ignoring the click).
+  if (busy) { resetQueued = true; return; }
+  resetQueued = false;
+  // Hold the controls while the old session is cleared, so an early click can't be wiped out (load race).
+  busy = true; updateControls();
   await fetch(`/reset?session=${session}`, { method: 'POST' }).catch(() => {});
   session = newSession(); sessionStorage.setItem('ot-session', session);
   try { await client?.close(); } catch {}
   client = null; state = null; step = 0; op = 0; freeUsed = false; cancelled = new Set(); lastPerson = null; discussedTask = null;
   $('#chat').innerHTML = ''; $('#wire').innerHTML = '<li id="wire-empty" class="muted">Tool calls appear here as Alexa+ makes them.</li>';
   $('#proto').textContent = 'Not connected yet';
-  render(); updateControls();
+  busy = false; render(); updateControls();
 }
 $('#next').onclick = next;
 $('#auto').onclick = () => { auto = true; next(); };
