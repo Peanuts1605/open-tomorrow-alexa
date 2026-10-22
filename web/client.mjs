@@ -223,17 +223,18 @@ function renderQr() {
 }
 setInterval(async () => {
   if (busy || auto || !client || $('#qrcard').hidden || document.hidden) return;
+  let ownsBusy = false;
   try {
     const d = await (await fetch(`/api/summary?session=${session}`, { cache: 'no-store' })).json();
     if (!(d.revision > state.revision) || busy) return;
-    busy = true; updateControls();
+    busy = true; ownsBusy = true; updateControls();
     const before = pending().map(t => t.assignee);
     await call('check_coverage', {});
     const who = before.filter(id => !pending().some(t => t.assignee === id)).map(person);
     const reply = `${who.length ? `${who.join(' and ')} just accepted on their phone. ` : ''}${state.status === 'ENTERED_TASKS_COVERED' ? 'That’s a fresh yes for the current assignment. You’re covered ✅ for every task you gave me.' : explain()}`;
     ring('speaking'); bubble('alexa', reply); await speak(reply);
     if (state.status === 'ENTERED_TASKS_COVERED' && mobile()) $('#board').closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } catch {} finally { if (busy) { ring('idle'); busy = false; updateControls(); } }
+  } catch {} finally { if (ownsBusy) { ring('idle'); busy = false; updateControls(); } }
 }, 2000);
 
 // ---------- rendering ----------
@@ -322,14 +323,17 @@ async function next() {
 }
 async function reset() {
   if (busy) return;
-  auto = false; speechSynthesis?.cancel?.();
-  await fetch(`/reset?session=${session}`, { method: 'POST' }).catch(() => {});
-  session = newSession(); sessionStorage.setItem('ot-session', session);
-  try { await client?.close(); } catch {}
-  client = null; state = null; step = 0; op = 0; freeUsed = false; cancelled = new Set(); lastPerson = null; discussedTask = null;
-  $('#chat').innerHTML = ''; $('#wire').innerHTML = '<li id="wire-empty" class="muted">Tool calls appear here as Alexa+ makes them.</li>';
-  $('#proto').textContent = 'Not connected yet';
-  render(); updateControls();
+  busy = true; updateControls();
+  try {
+    auto = false; speechSynthesis?.cancel?.();
+    await fetch(`/reset?session=${session}`, { method: 'POST', signal: AbortSignal.timeout(5000) }).catch(() => {});
+    session = newSession(); sessionStorage.setItem('ot-session', session);
+    try { await client?.close(); } catch {}
+    client = null; state = null; step = 0; op = 0; freeUsed = false; cancelled = new Set(); lastPerson = null; discussedTask = null;
+    $('#chat').innerHTML = ''; $('#wire').innerHTML = '<li id="wire-empty" class="muted">Tool calls appear here as Alexa+ makes them.</li>';
+    $('#proto').textContent = 'Not connected yet';
+    render();
+  } finally { busy = false; updateControls(); }
 }
 $('#next').onclick = next;
 $('#auto').onclick = () => { auto = true; next(); };
