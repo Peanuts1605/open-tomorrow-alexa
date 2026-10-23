@@ -77,4 +77,4 @@ The idea is the opposite of "you're all set": an assistant that refuses a stale 
 
 The idea was written down in July 2026. Code started on September 11, 2026, inside the submission period. See
 the commit history; v2 (MCP App, Workers AI layer, Agent Skill, this page) was added on October 22, 2026.
-AI-assisted design and code.
+AI-assisted design and code by Codex, Grok Bot and AI coding agents.

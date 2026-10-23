@@ -147,4 +147,4 @@ Protocol **2025-11-25**, negotiated and verified in the demonstration using `@mo
 
 The Alexa+ track of the [Amazon Developer Hackathon](https://amazonappdev2026.devpost.com/). The Open Tomorrow idea was first written down in July 2026; this implementation began on September 11, 2026, within the hackathon period.
 
-AI-assisted design and code by Codex and AI coding agents. The authored fixture contains no real shop, employee or customer information. No third-party media assets are used. The MCP SDK and Zod retain their respective open-source licenses.
+AI-assisted design and code by Codex, Grok Bot and AI coding agents. The authored fixture contains no real shop, employee or customer information. No third-party media assets are used. The MCP SDK and Zod retain their respective open-source licenses.
